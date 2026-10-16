@@ -42,9 +42,21 @@ LONG WINAPI CrashVehHandler(PEXCEPTION_POINTERS ep) {
     if (code == EXCEPTION_ACCESS_VIOLATION || code == EXCEPTION_ILLEGAL_INSTRUCTION ||
         code == EXCEPTION_STACK_OVERFLOW || code == 0xC0000409 /* STATUS_STACK_BUFFER_OVERRUN / __fastfail */ ||
         code == 0xE06D7363 /* C++ exception */) {
+        
+        // Filter out safe SEH read probes (SafeCopy reading unmapped addresses during memory scans)
+        if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2) {
+            const ULONG_PTR type = ep->ExceptionRecord->ExceptionInformation[0];
+            const ULONG_PTR target = ep->ExceptionRecord->ExceptionInformation[1];
+            // Non-fatal read probe: reading small values/floats outside code/heap space
+            if (type == 0 && (target <= 0xFFFFFFFF || target == 0x000000003F800000ULL || target == 0x00000000BF800000ULL)) {
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+        }
+
         const uintptr_t rip = ep->ContextRecord != nullptr ? static_cast<uintptr_t>(ep->ContextRecord->Rip) : 0;
         const uintptr_t addr = reinterpret_cast<uintptr_t>(ep->ExceptionRecord->ExceptionAddress);
         const uintptr_t base = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
+        Log("======================================== CRASH VEH REPORT ========================================");
         Log("CRASH-VEH: Exception 0x%08lX at addr %p (RVA 0x%llX, rip %p, tid %lu)",
             code, reinterpret_cast<void*>(addr),
             (addr >= base) ? static_cast<unsigned long long>(addr - base) : 0ULL,
@@ -56,6 +68,35 @@ LONG WINAPI CrashVehHandler(PEXCEPTION_POINTERS ep) {
                 type == 0 ? "reading" : type == 1 ? "writing" : "executing",
                 reinterpret_cast<void*>(target));
         }
+
+        if (ep->ContextRecord != nullptr) {
+            const PCONTEXT c = ep->ContextRecord;
+            Log("CRASH-VEH: RAX=%p RBX=%p RCX=%p RDX=%p", reinterpret_cast<void*>(c->Rax), reinterpret_cast<void*>(c->Rbx), reinterpret_cast<void*>(c->Rcx), reinterpret_cast<void*>(c->Rdx));
+            Log("CRASH-VEH: RSI=%p RDI=%p RBP=%p RSP=%p", reinterpret_cast<void*>(c->Rsi), reinterpret_cast<void*>(c->Rdi), reinterpret_cast<void*>(c->Rbp), reinterpret_cast<void*>(c->Rsp));
+            Log("CRASH-VEH: R8 =%p R9 =%p R10=%p R11=%p", reinterpret_cast<void*>(c->R8), reinterpret_cast<void*>(c->R9), reinterpret_cast<void*>(c->R10), reinterpret_cast<void*>(c->R11));
+            Log("CRASH-VEH: R12=%p R13=%p R14=%p R15=%p", reinterpret_cast<void*>(c->R12), reinterpret_cast<void*>(c->R13), reinterpret_cast<void*>(c->R14), reinterpret_cast<void*>(c->R15));
+        }
+
+        void* frames[32] = {};
+        const USHORT got = RtlCaptureStackBackTrace(0, 32, frames, nullptr);
+        Log("CRASH-VEH: Stack Backtrace (%u frames):", static_cast<unsigned>(got));
+        for (USHORT i = 0; i < got; ++i) {
+            const uintptr_t faddr = reinterpret_cast<uintptr_t>(frames[i]);
+            HMODULE hMod = nullptr;
+            if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                   reinterpret_cast<LPCSTR>(faddr), &hMod) && hMod != nullptr) {
+                char modname[MAX_PATH] = {};
+                GetModuleFileNameA(hMod, modname, MAX_PATH);
+                const char* base_name = strrchr(modname, '\\');
+                base_name = base_name ? base_name + 1 : modname;
+                Log("  frame[%2u]: %p (%s + 0x%llX)", static_cast<unsigned>(i), reinterpret_cast<void*>(faddr),
+                    base_name, static_cast<unsigned long long>(faddr - reinterpret_cast<uintptr_t>(hMod)));
+            } else {
+                Log("  frame[%2u]: %p", static_cast<unsigned>(i), reinterpret_cast<void*>(faddr));
+            }
+        }
+        Log("==================================================================================================");
+
         std::lock_guard<std::mutex> g(g_log_mutex);
         if (g_log) fflush(g_log);
     }

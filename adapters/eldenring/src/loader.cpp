@@ -45,6 +45,7 @@
 #include "eldenring_creeper.hpp"
 
 #include "eldenring_buddy.hpp"
+#include "eldenring_infinite_summon.hpp"
 #include "eldenring_chrscan.hpp"
 #include "eldenring_mobs.hpp"
 #include "eldenring_creative.hpp"
@@ -246,7 +247,30 @@ bool CallVfunc7(uintptr_t damage_module, uintptr_t attacker, void* ctx) {
 // Detour of the function at 0x1404A7190 that copies ChrCam's vectors into another camera context. Before the copy the
 // position in ChrCam is replaced by the player's eye position, after it the engine's own value is put back, so the
 // camera controller and every other reader of ChrCam are untouched. Whether the renderer takes its view from that
-// context is exactly what this experiment finds out.
+// ---- infinite summon / dismissal suppression detour ------------------------------------------------------------------
+// Detour of CSBuddyDismissAll (0x1404BB9A0).
+// Bypassing THIS entire routine preserves existing allies on the battlefield
+// AND prevents freeing the tracking nodes, leaving CS::ComManipulator and the FromSoftware chunk allocator completely uncorrupted!
+using CSBuddyDismissAllFn = void(__fastcall*)(void* buddy_man, int32_t target_id);
+CSBuddyDismissAllFn g_csbuddy_dismiss_all_orig = nullptr;
+std::atomic<bool> g_infinite_summon_enabled{true};
+std::atomic<uint32_t> g_suppressed_dismiss_count{0};
+
+void __fastcall CSBuddyDismissAllDetour(void* buddy_man, int32_t target_id) {
+    const bool mc_on = g_mc_mode.load(std::memory_order_relaxed);
+    const bool egg_active = (g_infinite_summon_enabled.load(std::memory_order_relaxed) && mc_on);
+    if (eldenring::summon::shouldSuppressDismissal(mc_on, egg_active)) {
+        const unsigned count = g_suppressed_dismiss_count.fetch_add(1, std::memory_order_relaxed) + 1;
+        if (count <= 20 || count % 10 == 0) {
+            Log("infinite_summon: suppressed CSBuddyDismissAll call %u (bypassed dismissal loop & node deallocation)", count);
+        }
+        return; // Bypass entire dismissal loop & node deallocation!
+    }
+    if (g_csbuddy_dismiss_all_orig) {
+        g_csbuddy_dismiss_all_orig(buddy_man, target_id);
+    }
+}
+
 using RenderCamCopyFn = void(__fastcall*)(void* self);
 RenderCamCopyFn g_rcc_orig = nullptr;
 
@@ -1657,7 +1681,7 @@ struct SummonWatch {
 };
 SummonWatch g_summon_watch;
 std::atomic<uint64_t> g_last_summon_ms{0};
-constexpr uint64_t kSummonCooldownMs = 3000; // one request at a time: the manager consumes it on the next frame and spawns for a few seconds
+constexpr uint64_t kSummonCooldownMs = eldenring::summon::kFastSummonCooldownMs; // fast 200ms cooldown for responsive spawn eggs
 
 // Returns false when the feature is off (no mc_er_summon.txt) or a request is still in flight.
 bool QueueSummon(const char* source) {
@@ -3108,6 +3132,19 @@ void SetupDamage() {
         } else {
             Log("kill: the kill-character function is hooked at %p (RVA 0x%llX); while blocks exist or our jump is recent the player's kill is skipped", reinterpret_cast<void*>(kill),
                 static_cast<unsigned long long>(kill - g_img.base));
+        }
+    }
+    {
+        uintptr_t dismiss_all_fn = 0;
+        if (!LocateByPrefix(g_img, sigs::kCSBuddyDismissAll, dismiss_all_fn)) {
+            Log("infinite_summon: CSBuddyDismissAll signature not unique, multiple simultaneous summons disabled");
+        } else if (MH_CreateHook(reinterpret_cast<void*>(dismiss_all_fn), reinterpret_cast<void*>(&CSBuddyDismissAllDetour),
+                                 reinterpret_cast<void**>(&g_csbuddy_dismiss_all_orig)) != MH_OK ||
+                   MH_EnableHook(reinterpret_cast<void*>(dismiss_all_fn)) != MH_OK) {
+            Log("infinite_summon: hooking CSBuddyDismissAll at %p failed", reinterpret_cast<void*>(dismiss_all_fn));
+        } else {
+            Log("infinite_summon: CSBuddyDismissAll hooked at %p (RVA 0x%llX): entire dismissal routine suppressed, preventing premature node free and entity kill",
+                reinterpret_cast<void*>(dismiss_all_fn), static_cast<unsigned long long>(dismiss_all_fn - g_img.base));
         }
     }
     if (FileExists(g_game_dir + "mc_er_nolos.txt")) {

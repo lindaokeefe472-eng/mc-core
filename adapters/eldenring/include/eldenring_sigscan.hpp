@@ -176,6 +176,18 @@ inline constexpr const char* kChrEventDispatch =
 // (0x1404117EB, inside the fall damage evaluator). 28 bytes, one match in 2.7.1.0.
 inline constexpr const char* kFallTimeExceeded = "48 89 5C 24 08 57 48 83 EC 20 F3 0F 10 41 18 48 8B F9 0F 2F C1 0F 97 C3 84 DB 74 72";
 inline constexpr const char* kGetEffectiveTeamType = "48 89 5C 24 10 57 48 83 EC 20 0F B6 41 6C 48 8B F9 88 02";
+// CSBuddyDismissAll (0x1404BB9A0): (CSBuddyMan* this, int32_t targetGroupOrId)
+// The dismissal loop in CSBuddyMan that loops over active buddy entities and deletes tracking nodes.
+// Bypassing this entire function prevents both entity death and premature node memory free, keeping the heap uncorrupted!
+// 32 bytes, verified 100% unique in eldenring.exe 2.7.1.0.
+inline constexpr const char* kCSBuddyDismissAll =
+    "89 54 24 10 55 57 48 83 EC 28 48 8B 41 78 48 8B E9 48 8B 38 48 3B F8 0F 84 DA 00 00 00 48 89 5C";
+
+// WorldChrManRemoveBuddy (0x14050B340): (WorldChrMan* this, void* chrIns)
+// Safely unlinks and removes a buddy entity from WorldChrMan's +0x1E630 dynamic vector without killing or freeing it.
+// 32 bytes, verified 100% unique in eldenring.exe 2.7.1.0.
+inline constexpr const char* kWorldChrManRemoveBuddy =
+    "48 85 D2 0F 84 29 02 00 00 57 48 83 EC 30 48 C7 44 24 20 FE FF FF FF 48 89 5C 24 40 48 89 74 24";
 } // namespace sigs
 
 // ---- loader environment self-check ----------------------------------------------------------------------
