@@ -1255,7 +1255,11 @@ void RenderFrame(IDXGISwapChain* sc) {
             bool keep = blocks_drawn || should_draw_steve; // the blocks and Steve left their depth in the figure's buffer
             if (steve.shadow && g_steve.shadowReady()) {
                 std::vector<eldenring::shadow::Shadow> shadows;
-                for (const auto& d : draws) shadows.push_back(eldenring::shadow::shadowAt(d.feet[0], d.feet[1], d.feet[2], d.feet[1])); // a mob stands on the ground
+                for (const auto& d : draws) {
+                    const float gy = d.ground_valid ? d.ground_y : d.feet[1];
+                    const float r_scale = mc::archetypeShadowRadius(d.model_type, d.scale);
+                    shadows.push_back(eldenring::shadow::shadowAt(d.feet[0], d.feet[1], d.feet[2], gy, r_scale));
+                }
                 SteveParams shp;
                 shp.mode = g_depth_res == nullptr ? 0.f : (g_steve_cfg.occlusion ? 1.25f : 0.f);
                 shp.depth_const = g_steve_cfg.depth_const;

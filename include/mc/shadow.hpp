@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <string_view>
 
 namespace mc {
 
@@ -20,6 +21,23 @@ struct Shadow {
     float radius{0.f};
     float strength{0.f}; // alpha of the black at the centre
 };
+
+// Resolves relative shadow radius multiplier based on entity model archetype and scale
+inline float archetypeShadowRadius(std::string_view model_type, float scale = 1.0f) {
+    float base = 1.0f;
+    if (model_type == "iron_golem") {
+        base = 1.5f;
+    } else if (model_type == "creeper") {
+        base = 0.8f;
+    } else if (model_type == "skeleton") {
+        base = 1.0f;
+    } else if (model_type == "spider") {
+        base = 1.3f;
+    } else if (model_type == "slime_small") {
+        base = 0.5f;
+    }
+    return base * std::max(0.1f, scale);
+}
 
 // `radius_scale`: 1 for a player-sized figure.
 inline Shadow shadowAt(float x, float feet_y, float z, float ground_y, float radius_scale = 1.f) {

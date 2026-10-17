@@ -369,5 +369,19 @@ TEST(EldenRingMobs, SwellScalesBonesOutwardFromFeet) {
     EXPECT_FLOAT_EQ(draws[1].parts[head].m[10], 1.35f);
 }
 
+TEST(EldenRingMobs, PropagatesGroundHeightAndArchetypeModelTypeToDraw) {
+    MobRegistry r;
+    MobSnapshot s = at(0x42, 10.f, 20.f);
+    s.feet[1] = 15.f; // In the air
+    s.ground_y = 11.5f; // Ground is at 11.5
+    s.ground_valid = true;
+    s.model_type = "iron_golem";
+    s.scale = 1.4f;
 
-
+    auto draws = r.update(1.f / 60.f, {s});
+    ASSERT_EQ(draws.size(), 1u);
+    EXPECT_FLOAT_EQ(draws[0].ground_y, 11.5f);
+    EXPECT_TRUE(draws[0].ground_valid);
+    EXPECT_EQ(draws[0].model_type, "iron_golem");
+    EXPECT_FLOAT_EQ(draws[0].scale, 1.4f);
+}

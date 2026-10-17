@@ -749,3 +749,20 @@ TEST(VirtualSummonTest, ShiftTranslatesAllMobsAndProjectiles) {
     EXPECT_FLOAT_EQ(s_after->pos[2], s_z0 + 32.0f);
 }
 
+TEST(VirtualSummonTest, GeneratesMobSnapshotsWithGroundHeightAndArchetypeModelType) {
+    VirtualSummonManager mgr;
+    mgr.setGroundSampler([](float, float, float) {
+        return std::optional<float>(3.5f);
+    });
+
+    const auto p = makePlayer(0.0f, 8.0f, 0.0f, 0.0f);
+    uint64_t golem_id = mgr.spawnMob("iron_golem", p, 3.0f);
+    ASSERT_NE(golem_id, 0u);
+
+    const auto snapshots = mgr.generateSnapshots();
+    ASSERT_EQ(snapshots.size(), 1u);
+    EXPECT_EQ(snapshots[0].id, golem_id);
+    EXPECT_EQ(snapshots[0].model_type, "iron_golem");
+    EXPECT_FLOAT_EQ(snapshots[0].ground_y, 3.5f);
+    EXPECT_TRUE(snapshots[0].ground_valid);
+}

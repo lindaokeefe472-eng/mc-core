@@ -678,6 +678,19 @@ public:
             s.model_type = mob.model_type;
             s.scale = mob.scale;
             s.white_flash = mob.white_flash;
+            if (ground_sampler_) {
+                auto gy = ground_sampler_(mob.pos[0], mob.pos[1], mob.pos[2]);
+                if (gy.has_value()) {
+                    s.ground_y = *gy;
+                    s.ground_valid = true;
+                } else {
+                    s.ground_y = mob.pos[1];
+                    s.ground_valid = mob.on_ground;
+                }
+            } else {
+                s.ground_y = mob.pos[1];
+                s.ground_valid = mob.on_ground;
+            }
             out.push_back(s);
         }
         return out;

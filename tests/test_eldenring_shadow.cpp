@@ -127,3 +127,32 @@ TEST(EldenRingShadow, TheFalloffIsFullAtTheCentreAndZeroAtTheRim) {
     EXPECT_GT(falloff(0.3f), falloff(0.7f));
     EXPECT_FLOAT_EQ(falloff(1.5f), 0.f);
 }
+
+TEST(EldenRingShadow, ArchetypeShadowRadiusReturnsProportionalRadiusForIronGolemAndCreeper) {
+    EXPECT_FLOAT_EQ(mc::archetypeShadowRadius("zombie", 1.0f), 1.0f);
+    EXPECT_FLOAT_EQ(mc::archetypeShadowRadius("skeleton", 1.0f), 1.0f);
+    EXPECT_FLOAT_EQ(mc::archetypeShadowRadius("creeper", 1.0f), 0.8f);
+    EXPECT_FLOAT_EQ(mc::archetypeShadowRadius("iron_golem", 1.0f), 1.5f);
+    EXPECT_FLOAT_EQ(mc::archetypeShadowRadius("iron_golem", 2.0f), 3.0f);
+    EXPECT_FLOAT_EQ(mc::archetypeShadowRadius("creeper", 0.5f), 0.4f);
+}
+
+TEST(EldenRingShadow, AirborneMobProjectsShadowOnGroundBelowAndFadesWithHeight) {
+    const float feet_x = 10.0f;
+    const float feet_y = 15.0f; // Airborne in jump
+    const float feet_z = 20.0f;
+    const float ground_y = 12.0f; // Ground is 3m below
+    const float golem_scale = mc::archetypeShadowRadius("iron_golem", 1.0f);
+
+    const Shadow s = shadowAt(feet_x, feet_y, feet_z, ground_y, golem_scale);
+    EXPECT_TRUE(s.visible);
+    EXPECT_FLOAT_EQ(s.x, feet_x);
+    EXPECT_FLOAT_EQ(s.z, feet_z);
+    // Shadow must be on the ground, not in the air!
+    EXPECT_NEAR(s.y, ground_y + kLift, 1e-5f);
+    // Height delta = 3m, so radius and strength must be shrunk/faded proportionally
+    const float t = 3.0f / kFadeHeight;
+    EXPECT_NEAR(s.radius, kBaseRadius * golem_scale * (1.0f - 0.5f * t), 1e-5f);
+    EXPECT_NEAR(s.strength, kMaxStrength * (1.0f - t), 1e-5f);
+}
+

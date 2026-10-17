@@ -35,6 +35,8 @@ struct MobSnapshot {
     std::string model_type;
     float scale{1.0f};
     float white_flash{0.0f};
+    float ground_y{0.0f};
+    bool ground_valid{false};
 };
 
 struct MobDraw {
@@ -49,6 +51,8 @@ struct MobDraw {
     eldenring::render::PartMatrices parts{};
     float scale{1.0f};
     float white_flash{0.0f};
+    float ground_y{0.0f};
+    bool ground_valid{false};
 };
 
 class MobRegistry {
@@ -169,6 +173,8 @@ private:
         }
         d.scale = s.scale > 0.01f ? s.scale : 1.0f;
         d.white_flash = s.white_flash;
+        d.ground_y = s.ground_y;
+        d.ground_valid = s.ground_valid;
         const mc::Vec3 feet{s.feet[0], s.feet[1], s.feet[2]};
         const mc::rig::Mat4 flip = d.fall > 0.f ? eldenring::render::deathFallMatrix(feet, s.yaw, d.fall) : mc::rig::Mat4{};
         const mc::rig::Mat4 swell_mat = d.scale != 1.0f ? scaleAboutPoint(feet, d.scale) : mc::rig::Mat4{};
