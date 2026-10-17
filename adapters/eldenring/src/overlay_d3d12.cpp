@@ -1187,13 +1187,21 @@ void RenderFrame(IDXGISwapChain* sc) {
             shp.mode = g_depth_res == nullptr ? 0.f : (g_steve_cfg.occlusion ? 1.25f : 0.f); // like the blocks: not within 2.2 m of the camera
             shp.depth_const = g_steve_cfg.depth_const;
             shp.rel_bias = g_steve_cfg.rel_bias;
-            shp.abs_bias = g_steve_cfg.abs_bias;
+            shp.abs_bias = std::max(0.6f, g_steve_cfg.abs_bias);
             shp.depth_w = static_cast<float>(g_depth_w);
             shp.depth_h = static_cast<float>(g_depth_h);
             shp.keep_depth = blocks_drawn;
+            const auto s = eldenring::shadow::shadowAt(steve.feet[0], steve.feet[1], steve.feet[2], ground);
             g_steve.drawShadows(g_s.list, g_s.srv_heap, g_depth_gpu, g_s.width, g_s.height, vp,
-                                {eldenring::shadow::shadowAt(steve.feet[0], steve.feet[1], steve.feet[2], ground)}, shp, f.rtv);
+                                {s}, shp, f.rtv);
             g_s.list->OMSetRenderTargets(1, &f.rtv, FALSE, nullptr);
+            static auto last_shadow_log = std::chrono::steady_clock::now();
+            const auto now_t = std::chrono::steady_clock::now();
+            if (now_t - last_shadow_log > std::chrono::seconds(2)) {
+                last_shadow_log = now_t;
+                if (g_log) g_log("shadow: player s.vis=%d pos=(%.2f, %.2f, %.2f) r=%.2f str=%.2f g_valid=%d gy=%.2f mode=%.2f",
+                                 s.visible ? 1 : 0, s.x, s.y, s.z, s.radius, s.strength, steve.ground_valid ? 1 : 0, ground, shp.mode);
+            }
         }
         SteveParams sp;
         sp.mode = g_depth_res == nullptr ? 0.f : (g_steve_cfg.debug == 2 ? 3.f : (g_steve_cfg.debug != 0 ? 2.f : (g_steve_cfg.occlusion ? 1.f : 0.f)));
@@ -1264,7 +1272,7 @@ void RenderFrame(IDXGISwapChain* sc) {
                 shp.mode = g_depth_res == nullptr ? 0.f : (g_steve_cfg.occlusion ? 1.25f : 0.f);
                 shp.depth_const = g_steve_cfg.depth_const;
                 shp.rel_bias = g_steve_cfg.rel_bias;
-                shp.abs_bias = g_steve_cfg.abs_bias;
+                shp.abs_bias = std::max(0.6f, g_steve_cfg.abs_bias);
                 shp.depth_w = static_cast<float>(g_depth_w);
                 shp.depth_h = static_cast<float>(g_depth_h);
                 shp.keep_depth = keep;

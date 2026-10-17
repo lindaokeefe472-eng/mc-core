@@ -40,7 +40,7 @@ SamplerState skin_sampler : register(s0); // point, clamp (static sampler)
 RWByteAddressBuffer stats : register(u1); // 64 log2 bins of K = depth * view z (u0 would collide with the pixel shader output) // [0] sum of K * 1e6, [4] pixel count, [8] max, [12] min (K = depth * view z)
 
 struct VSIn  { float3 pos : POSITION; float2 uv : TEXCOORD0; };
-struct VSOut { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; float3 wpos : TEXCOORD1; };
+struct VSOut { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; float3 wpos : TEXCOORD1; float view_z : TEXCOORD2; };
 
 VSOut VSMain(VSIn i) {
     VSOut o;
@@ -48,6 +48,7 @@ VSOut VSMain(VSIn i) {
     o.pos = mul(w, view_proj);
     o.uv = i.uv;
     o.wpos = w.xyz;
+    o.view_z = o.pos.w;
     return o;
 }
 
@@ -72,10 +73,10 @@ float4 PSDepthView(FullOut i) : SV_Target {
 
 float4 PSMain(VSOut i) : SV_Target {
     if (scene.w > 0.5) {
-        // Reverse-Z game depth: nearer = larger, 0 = far. SV_POSITION.w is view-space z in D3D12 pixel shader.
+        // Reverse-Z game depth: nearer = larger, 0 = far. i.view_z is interpolated view-space z in metres.
         int2 texel = int2(i.pos.xy / dims.zw * dims.xy);
         float gd = scene_depth.Load(int3(texel, 0)).r;
-        float steve_z = i.pos.w;
+        float steve_z = i.view_z;
         if (scene.w > 2.5) {
             // Measurement: the constant K = depth * view z over the figure's pixels (the native character is drawn
             // in the same place, so the scene depth here is its own distance).
@@ -116,7 +117,7 @@ float4 PSShadow(VSOut i) : SV_Target {
     if (scene.w > 0.5) {
         int2 texel = int2(i.pos.xy / dims.zw * dims.xy);
         float gd = scene_depth.Load(int3(texel, 0)).r;
-        float steve_z = i.pos.w;
+        float steve_z = i.view_z;
         const float near_skip = (scene.w > 1.1 && scene.w < 1.4) ? 2.2 : 0.0;
         if (steve_z > near_skip && gd > 0.0 && scene.x / gd < steve_z * (1.0 - scene.y) - scene.z) discard;
     }

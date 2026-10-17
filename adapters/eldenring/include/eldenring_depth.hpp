@@ -168,4 +168,11 @@ inline bool shouldDiscardOccluded(float gd, float steve_z, float depth_const = k
     return scene_z < steve_z * (1.0f - rel_bias) - abs_bias;
 }
 
+// Evaluates shadow discard condition: a ground contact shadow disc must tolerate terrain roughness (slopes, steps, grass)
+// so it is not self-occluded by the terrain it rests upon, while still being properly occluded by intervening obstacles/walls.
+inline bool shouldDiscardShadowOccluded(float gd, float shadow_z, float depth_const = kEldenRingNearPlane, float rel_bias = 0.05f, float abs_bias = 0.05f, float near_skip = 2.2f) {
+    const float effective_abs_bias = std::max(0.6f, abs_bias);
+    return shouldDiscardOccluded(gd, shadow_z, depth_const, rel_bias, effective_abs_bias, near_skip);
+}
+
 } // namespace eldenring::depth

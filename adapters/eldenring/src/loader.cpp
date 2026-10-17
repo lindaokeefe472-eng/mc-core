@@ -2093,13 +2093,14 @@ bool HudProvider(erov::HudState& out, erov::SteveState& steve) {
         steve.draw = false; // slot probing: show only the native model, with the one slot missing
     }
     {   // why Steve is or is not drawn, logged when any of the inputs changes
-        struct Seen { bool draw, enabled, first_person, show, mc, cam_ok; int slot_probe; bool valid; };
+        struct Seen { bool draw, enabled, first_person, show, mc, cam_ok, shadow, ground_valid; int slot_probe; bool valid; };
         static Seen last{};
-        const Seen now{steve.draw, g_steve_enabled.load(), g_first_person.load(), out.show, out.mc_mode, steve.cam_valid, g_slot_probe.load(), true};
+        const Seen now{steve.draw, g_steve_enabled.load(), g_first_person.load(), out.show, out.mc_mode, steve.cam_valid, steve.shadow, steve.ground_valid, g_slot_probe.load(), true};
         if (!last.valid || now.draw != last.draw || now.enabled != last.enabled || now.first_person != last.first_person || now.show != last.show ||
-            now.mc != last.mc || now.cam_ok != last.cam_ok || now.slot_probe != last.slot_probe) {
-            Log("STEVE-STATE: draw=%d enabled=%d cam_valid=%d first_person=%d slot_probe=%d show=%d mc_mode=%d dead=%d", now.draw ? 1 : 0, now.enabled ? 1 : 0,
-                now.cam_ok ? 1 : 0, now.first_person ? 1 : 0, now.slot_probe, now.show ? 1 : 0, now.mc ? 1 : 0, steve.dead ? 1 : 0);
+            now.mc != last.mc || now.cam_ok != last.cam_ok || now.slot_probe != last.slot_probe || now.shadow != last.shadow || now.ground_valid != last.ground_valid) {
+            Log("STEVE-STATE: draw=%d enabled=%d cam_valid=%d first_person=%d slot_probe=%d show=%d mc_mode=%d dead=%d shadow=%d g_valid=%d gy=%.2f", now.draw ? 1 : 0, now.enabled ? 1 : 0,
+                now.cam_ok ? 1 : 0, now.first_person ? 1 : 0, now.slot_probe, now.show ? 1 : 0, now.mc ? 1 : 0, steve.dead ? 1 : 0,
+                steve.shadow ? 1 : 0, steve.ground_valid ? 1 : 0, steve.ground_y);
             last = now;
         }
     }
@@ -2246,8 +2247,8 @@ void SetupOverlay() {
         g_steve_enabled.store(true);
         Log("steve: hide_native=%d mask1=0x%X mask2=0x%X slots=0x%X", g_hide_native.load() ? 1 : 0, g_hide_mask1.load(), g_hide_mask2.load(),
         g_hide_slots.load());
-        Log("steve: enabled (occlusion=%d depth_const=%.4f rel_bias=%.3f abs_bias=%.3f scene_height=%.0f yaw_offset=%.1f deg)",
-            cfg.occlusion ? 1 : 0, cfg.depth_const, cfg.rel_bias, cfg.abs_bias, cfg.scene_height, g_steve_yaw_offset * 180.f / 3.14159265f);
+        Log("steve: enabled (occlusion=%d depth_const=%.4f rel_bias=%.3f abs_bias=%.3f shadow=%d scene_height=%.0f yaw_offset=%.1f deg)",
+            cfg.occlusion ? 1 : 0, cfg.depth_const, cfg.rel_bias, cfg.abs_bias, g_shadow_enabled.load() ? 1 : 0, cfg.scene_height, g_steve_yaw_offset * 180.f / 3.14159265f);
     }
     erov::Install(&HudProvider, [](const char* fmt, ...) {
         char msg[512];

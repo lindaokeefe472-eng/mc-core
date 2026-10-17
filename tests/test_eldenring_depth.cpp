@@ -76,3 +76,24 @@ TEST(EldenRingDepth, DemonstratesWhyOldBugCausedPermanentBlockVisibility) {
     const bool fixed_result = shouldDiscardOccluded(gd_wall, real_block_z, kEldenRingNearPlane, 0.05f, 0.05f);
     EXPECT_TRUE(fixed_result);
 }
+
+using eldenring::depth::shouldDiscardShadowOccluded;
+
+TEST(EldenRingDepth, ShadowOcclusionToleratesUnevenGroundWhileDiscardingAgainstWalls) {
+    const float shadow_z = 4.0f;
+    // Uneven terrain or grass 35cm in front of shadow disc (e.g. 3.65m from camera)
+    const float ground_z = 3.65f;
+    const float gd_ground = linearZToReverseZ(ground_z);
+
+    // Standard small abs_bias (0.05f) fails and discards the shadow on terrain
+    EXPECT_TRUE(shouldDiscardOccluded(gd_ground, shadow_z, kEldenRingNearPlane, 0.05f, 0.05f, 2.2f));
+
+    // shouldDiscardShadowOccluded must NOT discard uneven terrain
+    EXPECT_FALSE(shouldDiscardShadowOccluded(gd_ground, shadow_z, kEldenRingNearPlane, 0.05f, 0.05f, 2.2f));
+
+    // But an actual wall in front (e.g. 2.0m from camera) MUST properly discard/occlude the shadow
+    const float wall_z = 2.0f;
+    const float gd_wall = linearZToReverseZ(wall_z);
+    EXPECT_TRUE(shouldDiscardShadowOccluded(gd_wall, shadow_z, kEldenRingNearPlane, 0.05f, 0.05f, 2.2f));
+}
+
